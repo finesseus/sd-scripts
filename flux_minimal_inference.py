@@ -203,7 +203,18 @@ def generate_image(
     guidance: float,
     negative_prompt: Optional[str],
     cfg_scale: float,
-):
+    dtype: torch.dtype,
+    device: torch.device,
+    clip_l_dtype: torch.dtype,
+    t5xxl_dtype: torch.dtype,
+    ae_dtype: torch.dtype,
+    flux_dtype: torch.dtype,
+    tokenize_strategy: strategy_flux.FluxTokenizeStrategy,
+    encoding_strategy: strategy_flux.FluxTextEncodingStrategy,
+    accelerator: Optional[accelerate.Accelerator],
+    is_schnell: bool,
+    args: argparse.Namespace
+) -> Image.Image:
     seed = seed if seed is not None else random.randint(0, 2**32 - 1)
     logger.info(f"Seed: {seed}")
 
@@ -371,9 +382,15 @@ def generate_image(
     img.save(output_path)
 
     logger.info(f"Saved image to {output_path}")
+    return img
 
 
-if __name__ == "__main__":
+def is_fp8(dt):
+    return dt in [torch.float8_e4m3fn, torch.float8_e4m3fnuz, torch.float8_e5m2, torch.float8_e5m2fnuz]
+
+
+def flux_minimal(prompt: str) -> Image.Image:
+
     target_height = 768  # 1024
     target_width = 1360  # 1024
 
@@ -383,44 +400,51 @@ if __name__ == "__main__":
 
     device = get_preferred_device()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt_path", type=str, required=True)
-    parser.add_argument("--clip_l", type=str, required=False)
-    parser.add_argument("--t5xxl", type=str, required=False)
-    parser.add_argument("--ae", type=str, required=False)
-    parser.add_argument("--apply_t5_attn_mask", action="store_true")
-    parser.add_argument("--prompt", type=str, default="A photo of a cat")
-    parser.add_argument("--output_dir", type=str, default=".")
-    parser.add_argument("--dtype", type=str, default="bfloat16", help="base dtype")
-    parser.add_argument("--clip_l_dtype", type=str, default=None, help="dtype for clip_l")
-    parser.add_argument("--ae_dtype", type=str, default=None, help="dtype for ae")
-    parser.add_argument("--t5xxl_dtype", type=str, default=None, help="dtype for t5xxl")
-    parser.add_argument("--flux_dtype", type=str, default=None, help="dtype for flux")
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--steps", type=int, default=None, help="Number of steps. Default is 4 for schnell, 50 for dev")
-    parser.add_argument("--guidance", type=float, default=3.5)
-    parser.add_argument("--negative_prompt", type=str, default=None)
-    parser.add_argument("--cfg_scale", type=float, default=1.0)
-    parser.add_argument("--offload", action="store_true", help="Offload to CPU")
-    parser.add_argument(
-        "--lora_weights",
-        type=str,
-        nargs="*",
-        default=[],
-        help="LoRA weights, only supports networks.lora_flux and lora_oft, each argument is a `path;multiplier` (semi-colon separated)",
+    # ─── Configuration ───────────────────────────────────────────────────────────
+    args = argparse.Namespace(
+        # REQUIRED
+        # ckpt_path="./flux1-test/finesse_prodstudio-step00002300.safetensors",  # <— fill this in!
+        ckpt_path="./flux1-7e6/finesse_prodstudio-step00002000.safetensors",
+        # ckpt_path="./flux1-test/finesse_prodstudio-step00000100.safetensors",  # <— fill this in!
+        # optional model parts
+        clip_l="./models/flux/clip_l.safetensors",  # e.g. "path/to/clip_l.pt"
+        t5xxl="./models/flux/t5xxl_fp16.safetensors",  # e.g. "path/to/t5xxl.pt"
+        ae="./models/flux/ae.safetensors",  # e.g. "path/to/ae.pt"
+        apply_t5_attn_mask=False,
+        # prompts & outputs
+        prompt=prompt,
+        negative_prompt=None,
+        output_dir="outputs/",
+        # dtypes
+        dtype="bf16",
+        clip_l_dtype=None,
+        ae_dtype=None,
+        t5xxl_dtype=None,
+        flux_dtype="fp8",
+        # sampling & seed
+        # seed=2570961074,
+        seed=None,
+        steps=50,
+        guidance=7.5,
+        cfg_scale=1.0,
+        # resource
+        offload=True,
+        # LoRA
+        lora_weights=[],  # list of "path;multiplier"
+        merge_lora_weights=False,
+        # image size & interactive
+        width=896,
+        height=1152,
+        interactive=False,
     )
-    parser.add_argument("--merge_lora_weights", action="store_true", help="Merge LoRA weights to model")
-    parser.add_argument("--width", type=int, default=target_width)
-    parser.add_argument("--height", type=int, default=target_height)
-    parser.add_argument("--interactive", action="store_true")
-    args = parser.parse_args()
+    # ──────────────────────────────────────────────────────────────────────────────
+
+    # ensure output directory exists
+    os.makedirs(args.output_dir, exist_ok=True)
 
     seed = args.seed
     steps = args.steps
     guidance_scale = args.guidance
-
-    def is_fp8(dt):
-        return dt in [torch.float8_e4m3fn, torch.float8_e4m3fnuz, torch.float8_e5m2, torch.float8_e5m2fnuz]
 
     dtype = str_to_dtype(args.dtype)
     clip_l_dtype = str_to_dtype(args.clip_l_dtype, dtype)
@@ -506,7 +530,7 @@ if __name__ == "__main__":
         lora_models.append(lora_model)
 
     if not args.interactive:
-        generate_image(
+        image = generate_image(
             model,
             clip_l,
             t5xxl,
@@ -519,6 +543,17 @@ if __name__ == "__main__":
             args.guidance,
             args.negative_prompt,
             args.cfg_scale,
+            dtype,
+            device,
+            clip_l_dtype,
+            t5xxl_dtype,
+            ae_dtype,
+            flux_dtype,
+            tokenize_strategy,
+            encoding_strategy,
+            accelerator,
+            is_schnell,
+            args
         )
     else:
         # loop for interactive
@@ -571,6 +606,19 @@ if __name__ == "__main__":
                 except ValueError as e:
                     logger.error(f"Invalid option: {opt}, {e}")
 
-            generate_image(model, clip_l, t5xxl, ae, prompt, seed, width, height, steps, guidance, negative_prompt, cfg_scale)
+            image = generate_image(model, clip_l, t5xxl, ae, prompt, seed, width, height, steps, guidance, negative_prompt, cfg_scale, dtype, device, clip_l_dtype, t5xxl_dtype, ae_dtype, flux_dtype)
 
     logger.info("Done!")
+    return image
+
+
+if __name__ == "__main__":
+    # prompt = "A studio product shot of a white puff-sleeve corset dress, featuring a structured bodice with boning for support, soft gathered sweetheart neckline, voluminous off-the-shoulder puff sleeves, and a flared mini skirt with adjustable ribbon straps and subtle pleating. The fabric has a soft satin sheen, with delicate stitching and fine tailoring details. Set against a neutral light grey background with even, professional lighting to highlight the texture and contours of the garment. The overall aesthetic is romantic and whimsical, inspired by vintage fairytale fashion and modern cottagecore elegance."
+    # prompt = "A studio product shot of a black crop top and light blue high-waisted jeans, with the crop top featuring a tight fit, short sleeves, and a thin wraparound drawstring that ties at the waist. The denim jeans have a classic five-pocket design, subtle faded texture, and a tapered ankle-length cut. The clothing is displayed floating against a light grey background with even, soft lighting to highlight textures and color contrast. Minimalist and modern aesthetic, clean and fashion-forward presentation."
+    # prompt = "A studio product shot of a beige two-piece outfit consisting of a textured spaghetti strap crop top and a pleated mini skirt, captured against a light grey background. The crop top features intricate ruffled detailing across the bust with a sheer mesh bodice that subtly hugs the torso, while the mini skirt is structured with clean box pleats and wide belt loops for a tailored appearance. The lighting is soft and even, emphasizing the fabric textures and contours of the garments. Style is modern and minimalistic with a touch of femininity, suitable for high fashion editorial or luxury e-commerce aesthetic."
+    # prompt = "A studio product shot of a bold, Y2K-inspired outfit featuring a fitted cropped jacket and matching bootcut pants in luxe, stretch velvet with an all-over cheetah print. The jacket has a sharp, tailored silhouette with a pointed collar, silver snap buttons, and three-quarter sleeves with ruched cuffs, echoing early 2000s pop star style. The high-waisted pants elongate the legs, flaring slightly at the ankles, and are accentuated with decorative belt loops and a wide metallic belt for added flash. Underneath, a metallic gold lamé camisole with spaghetti straps peeks out, adding a touch of glam. The look is completed with oversized gold hoop earrings and chunky platform heels. The aesthetic channels playful, confident, and unapologetically glamorous energy reminiscent of iconic girl group performances. Set against a neutral light grey background with even, professional lighting to highlight the texture and contours of the garment."
+    # prompt = "A hyper-feminine, ultra-short mini skirt in a playful light pink shade, crafted from sheer organza with a subtle iridescent sheen. The silhouette is body-skimming at the waist and hips, exploding into dramatic, multi-layered ruffles that cascade asymmetrically and barely graze the upper thigh. The waistband is defined with a glossy patent pink faux-leather belt, fastened by a chunky silver heart-shaped buckle for a bold, cheeky accent. Raw-edged ruffles create movement and volume, while visible topstitching on each layer adds attitude and texture. The skirt is fully lined with stretch mesh for comfort and a flirty peek of translucence. This piece channels unapologetic Y2K and E-girl energy—perfect for making a statement at a rave or festival. Even, professional lighting to highlight the texture and contours of the garment."
+    prompt = " A studio product shot of a hyper-feminine, ultra-short mini skirt in a playful light pink shade, crafted from sheer organza with a subtle iridescent sheen. The silhouette is body-skimming at the waist and hips, exploding into dramatic, multi-layered ruffles that cascade asymmetrically and barely graze the upper thigh. The waistband is defined with a glossy patent pink faux-leather belt, fastened by a chunky silver heart-shaped buckle for a bold, cheeky accent. Raw-edged ruffles create movement and volume, while visible topstitching on each layer adds attitude and texture. The skirt is fully lined with stretch mesh for comfort and a flirty peek of translucence. This piece channels unapologetic Y2K and E-girl energy—perfect for making a statement at a rave or festival. Set against a neutral light grey background with even, professional lighting to highlight the texture and contours of the garment."
+    flux_minimal(prompt)
+
+    # good seeds: 2570961074

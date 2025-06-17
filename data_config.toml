@@ -1,0 +1,13 @@
+[general]
+# shuffle_caption = true
+keep_tokens = 1
+enable_bucket = true
+
+[[datasets]]
+resolution = [896, 1152]                                    # Training resolution
+batch_size = 1                                      # Batch size
+max_bucket_reso = 2048
+min_bucket_reso = 128
+
+  [[datasets.subsets]]
+  metadata_file = '/home/peter/projects/exp/sd-scripts/configs/studio_photo.json'

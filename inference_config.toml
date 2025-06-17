@@ -1,0 +1,37 @@
+# required
+ckpt_path = ""     # <— you must fill this in
+
+# optional model parts
+clip_l = ""
+t5xxl = ""
+ae    = ""
+
+# flags
+apply_t5_attn_mask = false
+
+# prompts & output
+prompt          = "A photo of a cat"
+output_dir      = "."
+
+# data types
+dtype         = "bfloat16"
+clip_l_dtype  = null
+ae_dtype      = null
+t5xxl_dtype   = null
+flux_dtype    = null
+
+# sampling & seed
+seed       = null
+steps      = null
+guidance   = 3.5
+cfg_scale  = 1.0
+
+# offload & LoRA
+offload             = false
+lora_weights        = []
+merge_lora_weights  = false
+
+# image dimensions & interactive mode
+width       = 1360
+height      = 768
+interactive = false

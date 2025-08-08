@@ -404,12 +404,12 @@ def flux_minimal(prompt: str) -> Image.Image:
     args = argparse.Namespace(
         # REQUIRED
         # ckpt_path="./flux1-test/finesse_prodstudio-step00002300.safetensors",  # <— fill this in!
-        ckpt_path="./flux1-7e6/finesse_prodstudio-step00002000.safetensors",
+        ckpt_path="/workspace/swarm/SwarmUI/Models/diffusion_models/finesse_prodstudio-step00002000.safetensors",
         # ckpt_path="./flux1-test/finesse_prodstudio-step00000100.safetensors",  # <— fill this in!
         # optional model parts
-        clip_l="./models/flux/clip_l.safetensors",  # e.g. "path/to/clip_l.pt"
-        t5xxl="./models/flux/t5xxl_fp16.safetensors",  # e.g. "path/to/t5xxl.pt"
-        ae="./models/flux/ae.safetensors",  # e.g. "path/to/ae.pt"
+        clip_l="/workspace/swarm/SwarmUI/Models/clip/clip_l.safetensors",  # e.g. "path/to/clip_l.pt"
+        t5xxl="/workspace/swarm/SwarmUI/Models/clip/t5xxl_enconly.safetensors",  # e.g. "path/to/t5xxl.pt"
+        ae="/workspace/swarm/SwarmUI/Models/VAE/ae.safetensors",  # e.g. "path/to/ae.pt"
         apply_t5_attn_mask=False,
         # prompts & outputs
         prompt=prompt,

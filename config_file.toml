@@ -13,10 +13,10 @@ fused_backward_pass = true
 full_bf16 = true
 
 # Model Paths
-pretrained_model_name_or_path = "./models/flux/flux1-dev.safetensors"
-clip_l = "./models/flux/clip_l.safetensors"
-t5xxl = "./models/flux/t5xxl_fp16.safetensors"
-ae = "./models/flux/ae.safetensors"
+pretrained_model_name_or_path = "/workspace/swarm/SwarmUI/Models/diffusion_models/flux1-dev.safetensors"
+clip_l = "/workspace/swarm/SwarmUI/Models/clip/clip_l.safetensors"
+t5xxl = "/workspace/swarm/SwarmUI/Models/clip/t5xxl_fp16.safetensors"
+ae = "/workspace/swarm/SwarmUI/Models/VAE/ae.safetensors"
 save_model_as = "safetensors"
 
 # Output and logging Configuration
@@ -26,7 +26,7 @@ save_every_n_steps = 100
 log_with = "wandb"
 logging_dir = "wandb"
 log_tracker_name = "kohya-bg"
-sample_every_n_steps = 100
+sample_every_n_steps = 50
 sample_prompts = "sample_prompts.txt"
 
 # Dataset
@@ -52,7 +52,7 @@ timestep_sampling = "shift"
 discrete_flow_shift = 3.1582
 model_prediction_type = "raw"
 guidance_scale = 1.0
-blocks_to_swap = 10
+blocks_to_swap = 0
 
 
 
